@@ -1,0 +1,71 @@
+# .github/workflows/claude-review.yml
+# =============================================================================
+# ClaimFlow CI — Claude Code Review Pipeline
+# =============================================================================
+# Runs automatically on every pull request.
+# Uses Claude Code non-interactively (-p flag) — no human needed.
+# Fails the PR if any critical issues are found.
+# =============================================================================
+
+name: Claude Code Review
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'src/**/*.ts'
+
+jobs:
+  claude-review:
+    name: Claude Code Review (Non-Interactive)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
+
+      # ── STEP 1: Non-interactive mode verified by -p flag usage below ────────
+
+      # ── STEP 3 + STEP 4 + STEP 6: Multi-pass, independent instances, structured output
+      - name: Run Claude Code multi-pass review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: ./scripts/demo-multipass.sh
+
+      # ── Upload structured findings as a CI artifact ──────────────────────────
+      - name: Upload review report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-review-report
+          path: review-output/
+
+      # ── Optional: Post findings as a PR comment ───────────────────────────────
+      # Uncomment to auto-post structured findings directly on the PR
+      #
+      # - name: Post review as PR comment
+      #   if: always()
+      #   uses: actions/github-script@v7
+      #   with:
+      #     script: |
+      #       const fs = require('fs');
+      #       const files = fs.readdirSync('review-output').filter(f => f.endsWith('.md'));
+      #       if (files.length === 0) return;
+      #       const body = fs.readFileSync(`review-output/${files[0]}`, 'utf8');
+      #       github.rest.issues.createComment({
+      #         issue_number: context.issue.number,
+      #         owner: context.repo.owner,
+      #         repo: context.repo.repo,
+      #         body: body.slice(0, 65536)  // GitHub comment size limit
+      #       });

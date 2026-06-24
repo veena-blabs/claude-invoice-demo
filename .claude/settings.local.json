@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bash scripts/review.sh)",
+      "Bash(bash -x scripts/review.sh)",
+      "Bash(claude *)"
+    ]
+  }
+}
