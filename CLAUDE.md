@@ -31,15 +31,14 @@ These standards govern every automated code review run in CI.
 
 ---
 
-## What to SKIP (do not flag)
-
-- Variable naming style (camelCase vs snake_case preferences)
-- Comment formatting or missing JSDoc
-- Whitespace, blank lines, trailing commas
+## What to SKIP
+These are nits — do NOT flag them in output:
+- Variable naming conventions (e.g. camelCase vs snake_case)
+- Comment style or missing comments
+- Whitespace and indentation
 - Import ordering
-- Prefer `const` over `let` when value never reassigns (nit)
-- Single-letter variable names in small closures
-- Any issue already covered by ESLint rules in `.eslintrc`
+- Optional chaining style (e.g. user?.id vs user && user.id)
+- Unused variable warnings (handled by linter separately)
 
 ---
 

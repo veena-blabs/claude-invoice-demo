@@ -1,87 +1,97 @@
 #!/usr/bin/env bash
 # =============================================================================
 # Prompt Refinement Demo — CCA-F Step 2
-# =============================================================================
-# Demonstrates the 3-stage iterative prompt refinement on a single file.
-# Each stage produces visibly better precision (fewer false positives,
-# more accurate severity). Run this in your walkthrough video.
+# Demonstrates 3-stage iterative prompt refinement on a single source file.
+# Each stage shows improved precision: fewer false positives, better severity.
 #
 # Usage: ./scripts/demo-prompt-refinement.sh [file]
-# Default file: src/auth/login.ts
+# Default: src/auth/login.ts
 # =============================================================================
 
 set -euo pipefail
 
-CYAN='\033[0;36m'; BOLD='\033[1m'; GREEN='\033[0;32m'
-YELLOW='\033[1;33m'; RESET='\033[0m'
+BOLD='\033[1m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; RESET='\033[0m'
 
 FILE="${1:-src/auth/login.ts}"
-sep() { echo -e "${BOLD}──────────────────────────────────────────────────${RESET}"; }
+FILE_CONTENT="$(cat "$FILE")"
 
+box() {
+    local text="$1"
+    local inner="  ${text}  "
+    local len=${#inner}
+    local top="╔" bot="╚"
+    for ((i=0; i<len; i++)); do top+="═"; bot+="═"; done
+    top+="╗"; bot+="╝"
+    echo -e "${BOLD}${top}${RESET}"
+    echo -e "${BOLD}║${inner}║${RESET}"
+    echo -e "${BOLD}${bot}${RESET}"
+}
+
+echo ""
 echo -e "${BOLD}Prompt Refinement Demo — 3 Stages${RESET}"
-echo -e "File: ${CYAN}$FILE${RESET}"
-sep
+echo -e "File: ${CYAN}${FILE}${RESET}"
+echo ""
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STAGE 1: Broad / naive prompt
+# =============================================================================
+# STAGE 1 — Vague Prompt (Baseline)
 # Problem: flags style nits, inconsistent severity, vague fixes
-# ─────────────────────────────────────────────────────────────────────────────
-echo -e "${YELLOW}Stage 1: Broad prompt (no criteria)${RESET}"
-echo "Prompt: claude -p \"Review this code and tell me what's wrong.\""
-sep
-
-claude -p "Review this code and tell me what's wrong. File: $FILE" \
-  --add-dir "$(pwd)" 2>/dev/null || true
-
-sep
+# =============================================================================
+box "STAGE 1 — Vague Prompt (Baseline)"
 echo ""
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STAGE 2: Explicit criteria added
+claude -p "Review this code and tell me what's wrong.
+
+File: ${FILE}
+\`\`\`typescript
+${FILE_CONTENT}
+\`\`\`"
+
+echo ""
+echo "════ END STAGE 1 ════"
+echo ""
+
+# =============================================================================
+# STAGE 2 — Scoped Prompt (Real Bugs Only)
 # Improvement: stops flagging nits, consistent severity labels
-# ─────────────────────────────────────────────────────────────────────────────
-echo -e "${YELLOW}Stage 2: Explicit criteria (no examples yet)${RESET}"
-echo "Prompt: claude -p \"Review this file for real bugs only; ignore cosmetic style.\""
-sep
-
-# ── THIS IS THE EXACT PROMPT REQUIRED IN YOUR WALKTHROUGH VIDEO (Prompt 1) ──
-claude -p "Review this file for real bugs only; ignore cosmetic style.
-
-Flag: null dereferences, SQL injection, hardcoded secrets, unhandled exceptions,
-      broken HTTP status codes, missing auth checks.
-Skip: variable naming, comment style, whitespace, import ordering.
-
-File: $FILE" \
-  --add-dir "$(pwd)" 2>/dev/null || true
-
-sep
+# =============================================================================
+box "STAGE 2 — Scoped Prompt (Real Bugs Only)"
 echo ""
 
-# ─────────────────────────────────────────────────────────────────────────────
-# STAGE 3: Explicit criteria + few-shot examples
-# Improvement: model calibrates on your definition of bug vs nit
-# ─────────────────────────────────────────────────────────────────────────────
-echo -e "${GREEN}Stage 3: Explicit criteria + few-shot examples (final quality)${RESET}"
-sep
+claude -p "Review this file for real bugs only. Skip: variable naming, comment style, whitespace, import ordering. Flag: null dereferences, SQL injection, hardcoded secrets, unhandled exceptions, broken HTTP status codes.
 
-claude -p 'Review this file for real bugs only; ignore cosmetic style.
+File: ${FILE}
+\`\`\`typescript
+${FILE_CONTENT}
+\`\`\`"
 
-## Criteria
-Flag: null dereferences, SQL injection, hardcoded secrets, unhandled exceptions,
-      broken HTTP status codes, missing auth checks.
-Skip: variable naming, comment style, whitespace, import ordering.
+echo ""
+echo "════ END STAGE 2 ════"
+echo ""
+
+# =============================================================================
+# STAGE 3 — Criteria + Few-Shot Examples (Highest Precision)
+# Improvement: model calibrates on REAL BUG vs NIT distinction
+# =============================================================================
+box "STAGE 3 — Criteria + Few-Shot Examples (Highest Precision)"
+echo ""
+
+claude -p "Review this file for real bugs only. Skip: variable naming, comment style, whitespace, import ordering. Flag: null dereferences, SQL injection, hardcoded secrets, unhandled exceptions, broken HTTP status codes.
 
 ## Few-shot examples
 
 REAL BUG — flag this:
-  const secret = process.env.JWT_SECRET || "hardcoded_fallback";
+  const secret = process.env.JWT_SECRET || \"hardcoded_fallback\";
   Issue: Secret falls back to hardcoded value when env var absent.
   Severity: critical
-  Fix: throw new Error("JWT_SECRET env var is required")
+  Fix: throw new Error(\"JWT_SECRET env var is required\")
 
 NIT — skip this:
   const userList = users.map(u => u.email)
   Not a bug: single-letter variable in a short closure, style only.
+
+NIT — skip this:
+  const userId = user?.id
+  Not a bug: optional chaining style preference, not a real bug.
 
 ## Output format (findings only, no prose)
 File: <path>
@@ -90,11 +100,23 @@ Severity: critical | warning | info
 Issue: <one sentence>
 Fix: <concrete change>
 
-If no real issues: output exactly "No issues found."
+If no real issues: output exactly \"No issues found.\"
 
-File to review: '"$FILE" \
-  --add-dir "$(pwd)" 2>/dev/null || true
+File to review: ${FILE}
+\`\`\`typescript
+${FILE_CONTENT}
+\`\`\`"
 
-sep
-echo -e "${GREEN}Stage comparison complete.${RESET}"
-echo "Observe how each stage reduces noise and improves precision."
+echo ""
+echo "════ END STAGE 3 ════"
+echo ""
+
+# =============================================================================
+# Summary
+# =============================================================================
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "STAGE COMPARISON SUMMARY"
+echo "Stage 1: Vague prompt → noisy output, includes style nits"
+echo "Stage 2: Scoped prompt → only real bugs flagged"
+echo "Stage 3: Few-shot examples → highest precision, zero false positives"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

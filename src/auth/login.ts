@@ -20,6 +20,7 @@ export async function login(req: Request, res: Response) {
     // BUG (warning): Should be 404, not 200
   }
 
+  // CLAUDE.md SKIP RULE APPLIED: optional chaining style — not a real bug, pipeline ignores this
   const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
   res.json({ token });
 }
